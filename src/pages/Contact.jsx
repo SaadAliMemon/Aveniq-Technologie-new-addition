@@ -1,5 +1,5 @@
 import { usePageHead } from "@/lib/seo";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Footer } from "@/components/site/Footer";
 import { Navbar } from "@/components/site/Navbar";
 import { Cta, Section, SectionHeading } from "@/components/site/primitives";
@@ -24,6 +24,7 @@ const initialValues = {
   service: SERVICE_OPTIONS[0],
   message: "",
 };
+const WEB3FORMS_ACCESS_KEY = "6500df63-62e9-4537-9f75-e70a3dd6f7f7";
 const PAGE_HEAD = {
   meta: [
     { title: "Contact Aveniq Technologies | Start Your Technology Project" },
@@ -48,7 +49,8 @@ export default function ContactPage() {
   usePageHead(PAGE_HEAD);
   const [form, setForm] = useState(initialValues);
   const [errors, setErrors] = useState({});
-  const [submitted, setSubmitted] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState("idle");
+  const isSubmitting = useRef(false);
   const validate = () => {
     const nextErrors = {};
     if (!form.fullName.trim()) {
@@ -68,30 +70,69 @@ export default function ContactPage() {
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!validate()) {
-      setSubmitted(false);
+    if (isSubmitting.current) {
       return;
     }
-    const subject = `Project inquiry — ${form.fullName.trim()}`;
-    const body = [
-      `Full Name: ${form.fullName.trim()}`,
-      `Work Email: ${form.email.trim()}`,
-      `Phone Number: ${form.phone.trim() || "Not provided"}`,
-      `Company Name: ${form.company.trim() || "Not provided"}`,
-      `Service Required: ${form.service}`,
-      "",
-      `Project Details / Message:\n${form.message.trim()}`,
-    ].join("\n");
-    const mailto = `mailto:saad45881@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailto;
-    setSubmitted(true);
-    setForm(initialValues);
+    if (!validate()) {
+      return;
+    }
+
+    isSubmitting.current = true;
+    setSubmissionStatus("loading");
+    const formData = new FormData(event.currentTarget);
+    formData.set("name", form.fullName.trim());
+    formData.set("email", form.email.trim());
+    formData.set("phone", form.phone.trim());
+    formData.set("company", form.company.trim());
+    formData.set("service", form.service);
+    formData.set("message", form.message.trim());
+    formData.set("subject", `Project inquiry — ${form.fullName.trim()}`);
+    formData.set("botcheck", formData.get("botcheck") || "");
+
+    try {
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(Object.fromEntries(formData)),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || result?.success !== true) {
+        setSubmissionStatus("error");
+        setErrors((current) => ({
+          ...current,
+          submission:
+            result?.message ||
+            result?.body?.message ||
+            "Your inquiry could not be sent. Please try again.",
+        }));
+        return;
+      }
+
+      setSubmissionStatus("success");
+      setErrors({});
+      setForm(initialValues);
+    } catch {
+      setSubmissionStatus("error");
+      setErrors((current) => ({
+        ...current,
+        submission: "Unable to send your inquiry right now. Please try again.",
+      }));
+    } finally {
+      isSubmitting.current = false;
+    }
   };
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: undefined }));
+    setErrors((current) => ({ ...current, [field]: undefined, submission: undefined }));
+    if (submissionStatus !== "idle") {
+      setSubmissionStatus("idle");
+    }
   };
   return (
     <div className="relative min-h-screen overflow-x-clip bg-background">
@@ -157,11 +198,26 @@ export default function ContactPage() {
 
             <div className="surface-panel rounded-[28px] p-8 md:p-10">
               <form onSubmit={handleSubmit} noValidate className="space-y-5">
+                <input type="hidden" name="access_key" value={WEB3FORMS_ACCESS_KEY} />
+                <input
+                  type="hidden"
+                  name="subject"
+                  value={`Project inquiry — ${form.fullName.trim() || "Website visitor"}`}
+                />
+                <input
+                  type="checkbox"
+                  name="botcheck"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  autoComplete="off"
+                  style={{ display: "none" }}
+                />
                 <div className="grid gap-5 sm:grid-cols-2">
                   <label className="flex flex-col gap-2">
                     <span className="eyebrow">Full Name</span>
                     <input
                       type="text"
+                      name="name"
                       value={form.fullName}
                       onChange={(event) => updateField("fullName", event.target.value)}
                       className="rounded-xl border border-input bg-background/60 px-4 py-3 text-sm outline-none transition-colors focus:border-primary/60"
@@ -175,6 +231,7 @@ export default function ContactPage() {
                     <span className="eyebrow">Work Email</span>
                     <input
                       type="email"
+                      name="email"
                       value={form.email}
                       onChange={(event) => updateField("email", event.target.value)}
                       className="rounded-xl border border-input bg-background/60 px-4 py-3 text-sm outline-none transition-colors focus:border-primary/60"
@@ -188,6 +245,7 @@ export default function ContactPage() {
                     <span className="eyebrow">Phone Number</span>
                     <input
                       type="tel"
+                      name="phone"
                       value={form.phone}
                       onChange={(event) => updateField("phone", event.target.value)}
                       className="rounded-xl border border-input bg-background/60 px-4 py-3 text-sm outline-none transition-colors focus:border-primary/60"
@@ -201,6 +259,7 @@ export default function ContactPage() {
                     <span className="eyebrow">Company Name</span>
                     <input
                       type="text"
+                      name="company"
                       value={form.company}
                       onChange={(event) => updateField("company", event.target.value)}
                       className="rounded-xl border border-input bg-background/60 px-4 py-3 text-sm outline-none transition-colors focus:border-primary/60"
@@ -211,6 +270,7 @@ export default function ContactPage() {
                 <label className="flex flex-col gap-2">
                   <span className="eyebrow">Service Required</span>
                   <select
+                    name="service"
                     value={form.service}
                     onChange={(event) => updateField("service", event.target.value)}
                     className="rounded-xl border border-input bg-background/60 px-4 py-3 text-sm outline-none transition-colors focus:border-primary/60"
@@ -227,6 +287,7 @@ export default function ContactPage() {
                   <span className="eyebrow">Project Details / Message</span>
                   <textarea
                     rows={6}
+                    name="message"
                     value={form.message}
                     onChange={(event) => updateField("message", event.target.value)}
                     className="rounded-xl border border-input bg-background/60 px-4 py-3 text-sm outline-none transition-colors focus:border-primary/60"
@@ -238,17 +299,29 @@ export default function ContactPage() {
 
                 <button
                   type="submit"
+                  disabled={submissionStatus === "loading"}
                   className="w-full rounded-full px-7 py-3.5 text-sm font-semibold text-primary-foreground transition-transform duration-300 hover:-translate-y-0.5"
                   style={{ backgroundImage: "var(--gradient-accent)" }}
                 >
-                  Send Project Inquiry
+                  {submissionStatus === "loading" ? "Sending..." : "Send Project Inquiry"}
                 </button>
 
-                {submitted ? (
-                  <p className="rounded-xl border border-border bg-secondary/50 p-3 text-sm text-muted-foreground">
-                    Your email app should open with the inquiry ready to send. To enable live
-                    delivery, connect this form to a backend endpoint or email service. No private
-                    keys are stored in the frontend.
+                {submissionStatus === "success" ? (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="rounded-xl border border-border bg-secondary/50 p-3 text-sm text-muted-foreground"
+                  >
+                    Thank you for reaching out. Your project inquiry has been sent successfully.
+                  </p>
+                ) : null}
+                {submissionStatus === "error" ? (
+                  <p
+                    role="alert"
+                    aria-live="assertive"
+                    className="rounded-xl border border-border bg-secondary/50 p-3 text-sm text-destructive"
+                  >
+                    {errors.submission}
                   </p>
                 ) : null}
               </form>
