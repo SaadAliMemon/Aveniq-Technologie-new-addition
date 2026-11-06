@@ -1,0 +1,16 @@
+{
+  "name": "Aveniq Technologies",
+  "short_name": "Aveniq",
+  "description": "AI, automation, and development solutions for modern businesses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#5B8CFF",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
